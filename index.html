@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#090a0c">
+  <title>Gestão Pátio | STAR Serviços Automotivos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Gestão Pátio - início">
+        <img class="brand-logo" src="assets/star-logo.png" alt="STAR Serviços Automotivos">
+        <span class="brand-divider" aria-hidden="true"></span>
+        <span class="brand-system"><strong>GESTÃO</strong><small>PÁTIO</small></span>
+      </a>
+      <div class="topbar-right">
+        <div class="daily-counts" aria-live="polite">
+          <div><span>CARROS HOJE</span><strong id="entries-count">—</strong></div>
+          <i></i>
+          <div><span>FINALIZADOS</span><strong id="completed-count">—</strong></div>
+        </div>
+        <button id="fullscreen-toggle" class="button button-outline fullscreen-toggle" type="button" aria-label="Entrar em tela cheia" title="Entrar em tela cheia">
+          <svg class="fullscreen-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg>
+          <svg class="fullscreen-exit" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M8 3v3a2 2 0 0 1-2 2H3m13-5v3a2 2 0 0 0 2 2h3M3 16h3a2 2 0 0 1 2 2v3m13-5h-3a2 2 0 0 0-2 2v3"/></svg>
+        </button>
+        <button id="admin-toggle" class="button button-outline" type="button">Acesso do gerente</button>
+      </div>
+    </header>
+
+    <section class="intro">
+      <div>
+        <p class="eyebrow">ACOMPANHAMENTO DA OFICINA</p>
+        <h1>Fila do pátio</h1>
+        <p class="subheading">Ordem de atendimento e situação dos mecânicos.</p>
+      </div>
+      <div class="live-status"><span class="live-dot"></span><span id="connection-label">Conectando...</span></div>
+    </section>
+
+    <section id="notice" class="notice" role="status" hidden></section>
+    <section id="mechanic-board" class="mechanic-board" aria-live="polite"></section>
+    <section id="loading" class="loading">Carregando dados do pátio...</section>
+
+    <section id="admin-panel" class="admin-panel" hidden>
+      <div class="section-heading">
+        <div><p class="eyebrow">ACESSO RESTRITO</p><h2>Painel administrativo</h2></div>
+        <button id="logout-button" class="button button-outline" type="button" hidden>Sair</button>
+      </div>
+
+      <form id="login-form" class="panel-card login-form">
+        <h3>Entrar como administrador</h3>
+        <p>Use seu nome de usuário e a senha fornecida pelo responsável do sistema.</p>
+        <label>Usuário<input id="login-username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+        <label>Senha<input id="login-password" type="password" autocomplete="current-password" required></label>
+        <button class="button button-primary" type="submit">Entrar</button>
+      </form>
+
+      <div id="admin-content" hidden>
+        <div id="opening-card" class="panel-card opening-card"></div>
+        <div class="admin-grid">
+          <section class="panel-card">
+            <h3>Registrar veículo</h3>
+            <p>Registra a entrada e soma ao total de hoje. Selecione um mecânico para iniciar o serviço agora.</p>
+            <form id="vehicle-form" class="stack-form">
+              <label>Modelo do veículo<input id="vehicle-model" maxlength="100" placeholder="Ex.: Ônix" required></label>
+              <label>Atribuir agora (opcional)<select id="vehicle-mechanic"><option value="">Aguardar na fila</option></select></label>
+              <button class="button button-primary" type="submit">Registrar entrada</button>
+            </form>
+          </section>
+          <section class="panel-card">
+            <h3>Veículos aguardando</h3>
+            <div id="waiting-vehicles" class="waiting-list"></div>
+          </section>
+        </div>
+        <section class="panel-card">
+          <div class="section-heading compact"><div><h3>Equipe e ordem da fila</h3><p>Use as setas para reorganizar. Alterações são salvas imediatamente.</p></div></div>
+          <div id="admin-mechanics" class="admin-mechanics"></div>
+        </section>
+      </div>
+    </section>
+    <footer><span>GESTÃO PÁTIO</span><span id="updated-at">Aguardando sincronização</span></footer>
+  </main>
+
+  <dialog id="opening-dialog" class="dialog">
+    <form id="opening-form" method="dialog">
+      <div class="dialog-heading"><div><p class="eyebrow">INÍCIO DO EXPEDIENTE</p><h2>Confirmar presença</h2></div><button class="icon-button" value="cancel" aria-label="Fechar" formnovalidate>×</button></div>
+      <p class="dialog-copy">A ordem atual será preservada. Atrasados e ausentes vão para o fim, mantendo entre si a ordem anterior.</p>
+      <div id="attendance-fields" class="attendance-fields"></div>
+      <div class="dialog-actions"><button class="button button-outline" value="cancel" formnovalidate>Cancelar</button><button id="opening-submit" class="button button-primary" value="confirm">Confirmar abertura</button></div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js"></script>
+</body>
+</html>
