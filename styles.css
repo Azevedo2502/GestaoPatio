@@ -48,8 +48,8 @@ button { cursor: pointer; }
 }
 .brand-logo {
   display: block;
-  width: 180px;
-  height: 82px;
+  width: 290px;
+  height: 132px;
   object-fit: contain;
   object-position: center;
   background: transparent;
@@ -59,13 +59,13 @@ button { cursor: pointer; }
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 118px;
-  padding: 12px 16px;
+  min-width: 178px;
+  padding: 18px 22px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.02);
   color: #f3c842;
-  font: 800 1.05rem/1 "DM Sans", sans-serif;
+  font: 800 1.6rem/1 "DM Sans", sans-serif;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
@@ -122,7 +122,7 @@ h1 {
 .notice[hidden], [hidden] { display: none !important; }
 .mechanic-board {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
   align-items: start;
 }
@@ -316,6 +316,10 @@ input:focus, select:focus { border-color: #d7a900; box-shadow: 0 0 0 3px #eab600
 .opening-card h3 { margin: 0 0 5px; }
 .opening-card p { margin: 0; color: var(--muted); font-size: 12px; }
 .waiting-list { margin-top: 12px; }
+.add-mechanic-form { max-width: 520px; margin: 18px 0; }
+.add-mechanic-form > label { display: block; margin-bottom: 7px; font-size: 12px; font-weight: 700; }
+.add-mechanic-controls { display: flex; gap: 8px; }
+.add-mechanic-controls .button { flex: 0 0 auto; }
 .waiting-row, .admin-mechanic-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #292c30; }
 .waiting-row:last-child, .admin-mechanic-row:last-child { border-bottom: 0; }
 .waiting-row strong { font-size: 13px; }
@@ -364,6 +368,9 @@ footer span:first-child { font-weight: 800; letter-spacing: .1em; }
 }
 
 @media (max-width: 900px) {
+  .topbar { flex-wrap: wrap; gap: 12px; }
+  .topbar-right { width: 100%; justify-content: space-between; }
+  .mechanic-board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .completed-vehicles-grid {
     grid-template-columns: repeat(2, minmax(180px, 1fr));
   }
@@ -388,10 +395,12 @@ footer span:first-child { font-weight: 800; letter-spacing: .1em; }
   }
   .admin-mechanic-row { flex-wrap: wrap; }
   .admin-controls { flex-basis: 100%; justify-content: flex-start; padding-left: 44px; }
+  .add-mechanic-controls { align-items: stretch; flex-direction: column; }
 }
 @media (max-width: 420px) {
-  .brand-logo { width: 112px; height: 58px; }
-  .clock-box { min-width: 88px; padding: 8px 10px; font-size: 0.8rem; letter-spacing: .08em; }
+  .topbar-left { gap: 12px; }
+  .brand-logo { width: 176px; height: 88px; }
+  .clock-box { min-width: 140px; padding: 12px 14px; font-size: 1.15rem; letter-spacing: .08em; }
   .daily-counts { gap: 7px; }
   .daily-counts strong { font-size: 16px; }
   .topbar-right .button { padding: 8px 10px; }
@@ -401,4 +410,9 @@ footer span:first-child { font-weight: 800; letter-spacing: .1em; }
   .status { padding: 6px 7px; font-size: 9px; }
   .admin-controls { flex-wrap: wrap; padding-left: 0; }
   .admin-controls select, .admin-controls input { flex: 1; }
+}
+@media (max-width: 360px) {
+  .topbar-left { gap: 8px; }
+  .brand-logo { width: 130px; height: 70px; }
+  .clock-box { min-width: 112px; padding: 9px 10px; font-size: 0.95rem; }
 }

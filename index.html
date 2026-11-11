@@ -88,6 +88,13 @@
         </div>
         <section class="panel-card">
           <div class="section-heading compact"><div><h3>Equipe e ordem da fila</h3><p>Use as setas para reorganizar. Alterações são salvas imediatamente.</p></div></div>
+          <form id="mechanic-form" class="add-mechanic-form">
+            <label for="mechanic-name">Adicionar mecânico</label>
+            <div class="add-mechanic-controls">
+              <input id="mechanic-name" maxlength="80" placeholder="Nome do mecânico" required>
+              <button class="button button-primary" type="submit">Adicionar</button>
+            </div>
+          </form>
           <div id="admin-mechanics" class="admin-mechanics"></div>
         </section>
       </div>

@@ -6,6 +6,7 @@ Aplicação web para acompanhar a fila contínua dos mecânicos e administrar os
 
 1. Crie um projeto no [Supabase](https://supabase.com/). O plano gratuito atende a um uso inicial, sujeito aos limites e alterações de plano do fornecedor.
 2. No **SQL Editor**, execute todo o arquivo `supabase-schema.sql`.
+   Se o projeto já estiver em uso, execute também `fix-add-mechanic.sql` para habilitar o cadastro de mecânicos, garantir as colunas de placa, atualizar a função que grava a placa no início do serviço e recarregar o cache do Supabase.
    Se a confirmação diária de abertura falhar com `UPDATE requires a WHERE clause`, execute também `fix-open-workday.sql` no SQL Editor.
    Se a reorganização da fila falhar com essa mesma mensagem, execute também `fix-reorder-mechanics.sql`.
 3. Em **Project Settings → API**, copie a Project URL e a chave **publishable** (ou anon legada) para `supabase-config.js`. Nunca use `service_role`/secret key no navegador.

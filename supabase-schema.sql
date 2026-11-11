@@ -154,6 +154,34 @@ end;
 $$;
 revoke all on function public.lock_patio() from public;
 
+create or replace function public.add_mechanic(p_name text)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_name text := nullif(trim(coalesce(p_name, '')), '');
+  v_mechanic_id uuid;
+  v_position integer;
+begin
+  perform public.require_admin();
+  perform public.lock_patio();
+  if v_name is null or length(v_name) > 80 then
+    raise exception 'Informe um nome de mecânico com até 80 caracteres';
+  end if;
+  if exists (select 1 from public.mechanics where lower(name) = lower(v_name)) then
+    raise exception 'Já existe um mecânico com esse nome';
+  end if;
+  select coalesce(max(queue_position), 0) + 1 into v_position from public.mechanics;
+  insert into public.mechanics(name, queue_position)
+    values (v_name, v_position) returning id into v_mechanic_id;
+  insert into public.audit_log(actor_id, action, details)
+    values (auth.uid(), 'mechanic_added', jsonb_build_object('name', v_name, 'mechanic_id', v_mechanic_id));
+  return v_mechanic_id;
+end;
+$$;
+
 create or replace function public.require_open_workday()
 returns void
 language plpgsql
@@ -199,6 +227,7 @@ begin
 end;
 $$;
 
+drop function if exists public.start_service(uuid, text);
 create or replace function public.start_service(p_mechanic_id uuid, p_model text, p_plate text default null)
 returns uuid
 language plpgsql
@@ -445,6 +474,7 @@ end;
 $$;
 
 revoke all on function public.register_vehicle(text, text) from public;
+revoke all on function public.add_mechanic(text) from public;
 revoke all on function public.start_service(uuid, text, text) from public;
 revoke all on function public.assign_waiting_vehicle(uuid, uuid) from public;
 revoke all on function public.set_mechanic_status(uuid, text) from public;
@@ -452,6 +482,7 @@ revoke all on function public.finish_service(uuid) from public;
 revoke all on function public.reorder_mechanics(uuid[]) from public;
 revoke all on function public.open_workday(jsonb) from public;
 grant execute on function public.register_vehicle(text, text) to authenticated;
+grant execute on function public.add_mechanic(text) to authenticated;
 grant execute on function public.start_service(uuid, text, text) to authenticated;
 grant execute on function public.assign_waiting_vehicle(uuid, uuid) to authenticated;
 grant execute on function public.set_mechanic_status(uuid, text) to authenticated;
@@ -474,3 +505,5 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'vehicles'
   ) then alter publication supabase_realtime add table public.vehicles; end if;
 end $$;
+
+notify pgrst, 'reload schema';

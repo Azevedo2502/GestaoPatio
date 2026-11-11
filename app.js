@@ -95,7 +95,7 @@
       const details = [mechanic.vehicle_model, mechanic.vehicle_plate].filter(Boolean);
       vehicle.textContent = details.length ? details.join(" | ") : " ";
     } else {
-      vehicle.textContent = mechanic.status === "available" ? "Disponível" : " ";
+      vehicle.textContent = mechanic.status === "available" ? "Disponível" : statusLabel(mechanic.status);
     }
     info.append(name, vehicle);
     card.append(info);
@@ -115,6 +115,7 @@
       const sortedMechanics = [...state.mechanics].sort((a, b) => (a.queue_position ?? 9999) - (b.queue_position ?? 9999));
       const availableMechanics = sortedMechanics.filter((mechanic) => mechanic.status === "available");
       const maintenanceMechanics = sortedMechanics.filter((mechanic) => mechanic.status === "maintenance");
+      const otherMechanics = sortedMechanics.filter((mechanic) => !["available", "maintenance"].includes(mechanic.status));
 
       const availableColumn = document.createElement("div");
       availableColumn.className = "board-column";
@@ -152,7 +153,22 @@
         });
       }
 
-      board.append(availableColumn, maintenanceColumn);
+      const otherColumn = document.createElement("div");
+      otherColumn.className = "board-column";
+      const otherTitle = document.createElement("h2");
+      otherTitle.className = "board-column-title";
+      otherTitle.textContent = "PAUSA / AUSENTES";
+      otherColumn.append(otherTitle);
+      if (!otherMechanics.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty-column";
+        empty.textContent = "Nenhum mecânico fora da fila.";
+        otherColumn.append(empty);
+      } else {
+        otherMechanics.forEach((mechanic) => otherColumn.append(createMechanicCard(mechanic)));
+      }
+
+      board.append(availableColumn, maintenanceColumn, otherColumn);
     });
     loading.hidden = true;
   }
@@ -199,21 +215,36 @@
     const end = new Date(today);
     end.setHours(23, 59, 59, 999);
 
-    const { data, error } = await client.from("vehicles")
+    let result = await client.from("vehicles")
       .select("id,model,plate,completed_at")
       .eq("status", "completed")
       .gte("completed_at", start.toISOString())
       .lte("completed_at", end.toISOString())
       .order("completed_at", { ascending: false });
+    if (result.error && /plate/i.test(result.error.message || "")) {
+      result = await client.from("vehicles")
+        .select("id,model,completed_at")
+        .eq("status", "completed")
+        .gte("completed_at", start.toISOString())
+        .lte("completed_at", end.toISOString())
+        .order("completed_at", { ascending: false });
+    }
 
+    const { data, error } = result;
     if (error) throw error;
     renderCompletedVehicles(data || []);
   }
 
   async function loadBoard() {
-    const { data, error } = await client.from("mechanics")
+    let result = await client.from("mechanics")
       .select("id,name,queue_position,status,vehicle_model,vehicle_plate")
       .order("queue_position");
+    if (result.error && /vehicle_plate/i.test(result.error.message || "")) {
+      result = await client.from("mechanics")
+        .select("id,name,queue_position,status,vehicle_model")
+        .order("queue_position");
+    }
+    const { data, error } = result;
     if (error) throw error;
     state.mechanics = data || [];
     renderBoard();
@@ -493,7 +524,13 @@
             } else {
               await callRpc("set_mechanic_status", { p_mechanic_id: mechanic.id, p_status: status.value }, `Status de ${mechanic.name} atualizado.`);
             }
-          } catch (error) { showError(error, "Falha ao atualizar mecânico"); }
+          } catch (error) {
+            if (/Could not find the function public\.start_service|schema cache/i.test(error.message || "")) {
+              showToast("O Supabase ainda não reconhece a função com placa. Execute fix-add-mechanic.sql no SQL Editor para atualizar o banco.", true);
+            } else {
+              showError(error, "Falha ao atualizar mecânico");
+            }
+          }
         });
         controls.append(status, model, plate, save);
         if (mechanic.status === "maintenance" && mechanic.vehicle_model) {
@@ -653,6 +690,17 @@
       $("#vehicle-model").value = "";
       $("#vehicle-mechanic").value = "";
     } catch (error) { showError(error, "Falha ao registrar veículo"); }
+  });
+
+  $("#mechanic-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const input = $("#mechanic-name");
+    const name = input.value.trim();
+    if (!name) return;
+    try {
+      await callRpc("add_mechanic", { p_name: name }, `${name} adicionado à equipe.`);
+      input.value = "";
+    } catch (error) { showError(error, "Falha ao adicionar mecânico"); }
   });
 
   $("#opening-form").addEventListener("submit", async (event) => {
