@@ -14,18 +14,24 @@ create table if not exists public.mechanics (
   status text not null default 'available'
     check (status in ('available', 'maintenance', 'pause', 'absent')),
   vehicle_model text,
+  vehicle_plate text,
   current_vehicle_id uuid,
   updated_at timestamptz not null default now()
 );
 
+alter table public.mechanics add column if not exists vehicle_plate text;
+
 create table if not exists public.vehicles (
   id uuid primary key default gen_random_uuid(),
   model text not null check (length(trim(model)) between 1 and 100),
+  plate text,
   status text not null default 'waiting' check (status in ('waiting', 'in_service', 'completed')),
   mechanic_id uuid references public.mechanics(id) on delete set null,
   entered_at timestamptz not null default now(),
   completed_at timestamptz
 );
+
+alter table public.vehicles add column if not exists plate text;
 
 alter table public.mechanics drop constraint if exists mechanics_queue_position_key;
 do $$
@@ -165,7 +171,7 @@ end;
 $$;
 revoke all on function public.require_open_workday() from public;
 
-create or replace function public.register_vehicle(p_model text)
+create or replace function public.register_vehicle(p_model text, p_plate text default null)
 returns uuid
 language plpgsql
 security definer
@@ -174,6 +180,7 @@ as $$
 declare
   v_id uuid;
   v_today date := (now() at time zone 'America/Sao_Paulo')::date;
+  v_plate text := upper(regexp_replace(coalesce(trim(p_plate), ''), '[^A-Za-z0-9]', '', 'g'));
 begin
   perform public.require_admin();
   perform public.lock_patio();
@@ -181,18 +188,18 @@ begin
   if p_model is null or length(trim(p_model)) not between 1 and 100 then
     raise exception 'Informe um modelo de veículo válido';
   end if;
-  insert into public.vehicles(model) values (trim(p_model)) returning id into v_id;
+  insert into public.vehicles(model, plate) values (trim(p_model), case when v_plate = '' then null else v_plate end) returning id into v_id;
   insert into public.daily_metrics(business_date, entries_count)
     values (v_today, 1)
     on conflict (business_date) do update
       set entries_count = public.daily_metrics.entries_count + 1, updated_at = now();
   insert into public.audit_log(actor_id, action, details)
-    values (auth.uid(), 'vehicle_registered', jsonb_build_object('model', trim(p_model), 'vehicle_id', v_id));
+    values (auth.uid(), 'vehicle_registered', jsonb_build_object('model', trim(p_model), 'plate', case when v_plate = '' then null else v_plate end, 'vehicle_id', v_id));
   return v_id;
 end;
 $$;
 
-create or replace function public.start_service(p_mechanic_id uuid, p_model text)
+create or replace function public.start_service(p_mechanic_id uuid, p_model text, p_plate text default null)
 returns uuid
 language plpgsql
 security definer
@@ -204,6 +211,7 @@ declare
   v_name text;
   v_status text;
   v_current_vehicle_id uuid;
+  v_plate text := upper(regexp_replace(coalesce(trim(p_plate), ''), '[^A-Za-z0-9]', '', 'g'));
 begin
   perform public.require_admin();
   perform public.lock_patio();
@@ -222,22 +230,22 @@ begin
     ) then
       raise exception 'O mecânico já possui outro veículo associado';
     end if;
-    update public.mechanics set status = 'maintenance', updated_at = now()
+    update public.mechanics set status = 'maintenance', vehicle_model = trim(p_model), vehicle_plate = v_plate, updated_at = now()
       where id = p_mechanic_id;
     insert into public.audit_log(actor_id, action, details)
-      values (auth.uid(), 'service_resumed', jsonb_build_object('mechanic', v_name, 'model', trim(p_model)));
+      values (auth.uid(), 'service_resumed', jsonb_build_object('mechanic', v_name, 'model', trim(p_model), 'plate', v_plate));
     return v_current_vehicle_id;
   end if;
-  insert into public.vehicles(model, status, mechanic_id)
-    values (trim(p_model), 'in_service', p_mechanic_id) returning id into v_id;
-  update public.mechanics set status = 'maintenance', vehicle_model = trim(p_model),
+  insert into public.vehicles(model, plate, status, mechanic_id)
+    values (trim(p_model), case when v_plate = '' then null else v_plate end, 'in_service', p_mechanic_id) returning id into v_id;
+  update public.mechanics set status = 'maintenance', vehicle_model = trim(p_model), vehicle_plate = v_plate,
     current_vehicle_id = v_id, updated_at = now() where id = p_mechanic_id;
   insert into public.daily_metrics(business_date, entries_count)
     values (v_today, 1)
     on conflict (business_date) do update
       set entries_count = public.daily_metrics.entries_count + 1, updated_at = now();
   insert into public.audit_log(actor_id, action, details)
-    values (auth.uid(), 'service_started', jsonb_build_object('mechanic', v_name, 'model', trim(p_model)));
+    values (auth.uid(), 'service_started', jsonb_build_object('mechanic', v_name, 'model', trim(p_model), 'plate', v_plate));
   return v_id;
 end;
 $$;
@@ -263,9 +271,9 @@ begin
   if v_current_vehicle_id is not null then raise exception 'Resolva o veículo atualmente associado antes de atribuir outro'; end if;
   select * into v_vehicle from public.vehicles where id = p_vehicle_id and status = 'waiting' for update;
   if not found then raise exception 'Veículo não está mais aguardando'; end if;
-  update public.vehicles set status = 'in_service', mechanic_id = p_mechanic_id where id = p_vehicle_id;
+  update public.vehicles set status = 'in_service', mechanic_id = p_mechanic_id, plate = coalesce(v_vehicle.plate, null) where id = p_vehicle_id;
   update public.mechanics set status = 'maintenance', vehicle_model = v_vehicle.model,
-    current_vehicle_id = p_vehicle_id, updated_at = now() where id = p_mechanic_id;
+    vehicle_plate = coalesce(v_vehicle.plate, null), current_vehicle_id = p_vehicle_id, updated_at = now() where id = p_mechanic_id;
   insert into public.audit_log(actor_id, action, details)
     values (auth.uid(), 'vehicle_assigned', jsonb_build_object('mechanic_id', p_mechanic_id, 'vehicle_id', p_vehicle_id));
 end;
@@ -297,6 +305,7 @@ begin
   update public.mechanics
     set status = p_status,
         vehicle_model = case when p_status = 'available' then null else vehicle_model end,
+        vehicle_plate = case when p_status = 'available' then null else vehicle_plate end,
         current_vehicle_id = case when p_status = 'available' then null else current_vehicle_id end,
         updated_at = now()
     where id = p_mechanic_id;
@@ -328,11 +337,11 @@ begin
   if not found then raise exception 'Mecânico não encontrado'; end if;
   if v_vehicle_id is null then raise exception 'Não há veículo associado para finalizar'; end if;
   select coalesce(max(queue_position), 0) into v_last_position from public.mechanics;
-  update public.vehicles set status = 'completed', completed_at = now()
+  update public.vehicles set status = 'completed', completed_at = now(), plate = coalesce(plate, (select vehicle_plate from public.mechanics where id = p_mechanic_id))
     where id = v_vehicle_id and status = 'in_service';
   if not found then raise exception 'O veículo não está em manutenção'; end if;
   update public.mechanics set status = 'available', vehicle_model = null,
-    current_vehicle_id = null, queue_position = v_last_position + 1, updated_at = now()
+    vehicle_plate = null, current_vehicle_id = null, queue_position = v_last_position + 1, updated_at = now()
     where id = p_mechanic_id;
   update public.mechanics set queue_position = queue_position + v_last_position + 1
     where id <> p_mechanic_id;
@@ -435,15 +444,15 @@ begin
 end;
 $$;
 
-revoke all on function public.register_vehicle(text) from public;
-revoke all on function public.start_service(uuid, text) from public;
+revoke all on function public.register_vehicle(text, text) from public;
+revoke all on function public.start_service(uuid, text, text) from public;
 revoke all on function public.assign_waiting_vehicle(uuid, uuid) from public;
 revoke all on function public.set_mechanic_status(uuid, text) from public;
 revoke all on function public.finish_service(uuid) from public;
 revoke all on function public.reorder_mechanics(uuid[]) from public;
 revoke all on function public.open_workday(jsonb) from public;
-grant execute on function public.register_vehicle(text) to authenticated;
-grant execute on function public.start_service(uuid, text) to authenticated;
+grant execute on function public.register_vehicle(text, text) to authenticated;
+grant execute on function public.start_service(uuid, text, text) to authenticated;
 grant execute on function public.assign_waiting_vehicle(uuid, uuid) to authenticated;
 grant execute on function public.set_mechanic_status(uuid, text) to authenticated;
 grant execute on function public.finish_service(uuid) to authenticated;

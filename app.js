@@ -45,6 +45,10 @@
     return ({ available: "DISPONÍVEL", maintenance: "EM MANUTENÇÃO", pause: "PAUSA", absent: "AUSENTE" })[status] || status;
   }
 
+  function normalizePlate(value) {
+    return String(value || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 8);
+  }
+
   function renderWithMovement(container, render) {
     const previousPositions = new Map(
       [...container.children]
@@ -68,43 +72,158 @@
     });
   }
 
+  function createMechanicCard(mechanic, positionValue = null) {
+    const card = document.createElement("article");
+    card.className = `mechanic-card ${mechanic.status === "maintenance" ? "maintenance-card" : "available-card"}`;
+    card.dataset.mechanicId = mechanic.id;
+
+    if (mechanic.status !== "maintenance" && positionValue !== null) {
+      const position = document.createElement("span");
+      position.className = "position";
+      position.textContent = String(positionValue).padStart(2, "0");
+      card.append(position);
+    }
+
+    const info = document.createElement("div");
+    info.className = "mechanic-info";
+    const name = document.createElement("h2");
+    name.className = "mechanic-name";
+    name.textContent = mechanic.name;
+    const vehicle = document.createElement("p");
+    vehicle.className = "vehicle-label";
+    if (mechanic.status === "maintenance") {
+      const details = [mechanic.vehicle_model, mechanic.vehicle_plate].filter(Boolean);
+      vehicle.textContent = details.length ? details.join(" | ") : " ";
+    } else {
+      vehicle.textContent = mechanic.status === "available" ? "Disponível" : " ";
+    }
+    info.append(name, vehicle);
+    card.append(info);
+
+    const status = document.createElement("span");
+    status.className = `status status-${mechanic.status}`;
+    status.textContent = statusLabel(mechanic.status);
+    card.append(status);
+
+    return card;
+  }
+
   function renderBoard() {
     renderWithMovement(board, () => {
       board.replaceChildren();
-      state.mechanics.forEach((mechanic, index) => {
-        const card = document.createElement("article");
-        card.className = "mechanic-card";
-        card.dataset.mechanicId = mechanic.id;
-        const position = document.createElement("span");
-        position.className = "position";
-        position.textContent = String(index + 1).padStart(2, "0");
-        const info = document.createElement("div");
-        const name = document.createElement("h2");
-        name.className = "mechanic-name";
-        name.textContent = mechanic.name;
-        const vehicle = document.createElement("p");
-        vehicle.className = "vehicle-label";
-        vehicle.textContent = mechanic.status === "maintenance" && mechanic.vehicle_model ? mechanic.vehicle_model : " ";
-        info.append(name, vehicle);
-        const status = document.createElement("span");
-        status.className = `status status-${mechanic.status}`;
-        status.textContent = statusLabel(mechanic.status);
-        card.append(position, info, status);
-        board.append(card);
-      });
+
+      const availableMechanics = [...state.mechanics]
+        .filter((mechanic) => mechanic.status === "available")
+        .sort((a, b) => (a.queue_position ?? 9999) - (b.queue_position ?? 9999));
+
+      const maintenanceMechanics = [...state.mechanics].filter((mechanic) => mechanic.status === "maintenance");
+
+      const availableColumn = document.createElement("div");
+      availableColumn.className = "board-column";
+      const availableTitle = document.createElement("h2");
+      availableTitle.className = "board-column-title";
+      availableTitle.textContent = "MECÂNICOS DISPONÍVEIS";
+      availableColumn.append(availableTitle);
+
+      if (!availableMechanics.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty-column";
+        empty.textContent = "Nenhum mecânico disponível.";
+        availableColumn.append(empty);
+      } else {
+        availableMechanics.forEach((mechanic, index) => {
+          availableColumn.append(createMechanicCard(mechanic, index + 1));
+        });
+      }
+
+      const maintenanceColumn = document.createElement("div");
+      maintenanceColumn.className = "board-column";
+      const maintenanceTitle = document.createElement("h2");
+      maintenanceTitle.className = "board-column-title";
+      maintenanceTitle.textContent = "EM MANUTENÇÃO";
+      maintenanceColumn.append(maintenanceTitle);
+
+      if (!maintenanceMechanics.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty-column";
+        empty.textContent = "Nenhum mecânico em manutenção.";
+        maintenanceColumn.append(empty);
+      } else {
+        maintenanceMechanics.forEach((mechanic) => {
+          maintenanceColumn.append(createMechanicCard(mechanic));
+        });
+      }
+
+      board.append(availableColumn, maintenanceColumn);
     });
     loading.hidden = true;
   }
 
+  function renderCompletedVehicles(vehicles) {
+    const container = document.getElementById("completed-vehicles");
+    if (!container) return;
+    container.replaceChildren();
+
+    if (!vehicles.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty-column completed-empty";
+      empty.textContent = "Nenhum veículo finalizado hoje.";
+      container.append(empty);
+      return;
+    }
+
+    vehicles.forEach((vehicle) => {
+      const card = document.createElement("article");
+      card.className = "completed-vehicle-card";
+
+      const model = document.createElement("span");
+      model.className = "completed-vehicle-model";
+      model.textContent = vehicle.model || "Veículo";
+
+      const plate = document.createElement("span");
+      plate.className = "completed-vehicle-plate";
+      plate.textContent = vehicle.plate || "—";
+
+      const status = document.createElement("span");
+      status.className = "completed-vehicle-status";
+      status.textContent = "FINALIZADO";
+
+      card.append(model, plate, status);
+      container.append(card);
+    });
+  }
+
+  async function loadCompletedVehicles() {
+    if (!client) return;
+    const today = new Date();
+    const start = new Date(today);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(today);
+    end.setHours(23, 59, 59, 999);
+
+    const { data, error } = await client.from("vehicles")
+      .select("id,model,plate,completed_at")
+      .eq("status", "completed")
+      .gte("completed_at", start.toISOString())
+      .lte("completed_at", end.toISOString())
+      .order("completed_at", { ascending: false });
+
+    if (error) throw error;
+    renderCompletedVehicles(data || []);
+  }
+
   async function loadBoard() {
     const { data, error } = await client.from("mechanics")
-      .select("id,name,queue_position,status,vehicle_model")
+      .select("id,name,queue_position,status,vehicle_model,vehicle_plate")
       .order("queue_position");
     if (error) throw error;
     state.mechanics = data || [];
     renderBoard();
     if (state.admin) renderAdminData();
-    await loadCounts();
+    await Promise.all([
+      loadCounts(),
+      loadCompletedVehicles()
+    ]);
     if (state.admin) {
       await Promise.all([loadOpeningState(), loadWaitingVehicles()]);
     }
@@ -137,6 +256,7 @@
       .on("postgres_changes", { event: "*", schema: "public", table: "mechanics" }, scheduleRealtimeRefresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "daily_metrics" }, () => loadCounts().catch((e) => showError(e, "Falha ao atualizar contadores")))
       .on("postgres_changes", { event: "*", schema: "public", table: "vehicles" }, () => {
+        loadCompletedVehicles().catch((e) => showError(e, "Falha ao atualizar veículos finalizados"));
         if (state.admin) loadWaitingVehicles().catch((e) => showError(e, "Falha ao atualizar veículos"));
       })
       .subscribe((status) => {
@@ -198,6 +318,24 @@
       showToast("Esta conta não tem permissão administrativa.", true);
     }
     await refresh();
+  }
+
+  function updateLiveClock() {
+    const clock = document.getElementById("live-clock");
+    if (!clock) return;
+    const now = new Date();
+    const time = new Intl.DateTimeFormat(undefined, {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false
+    }).format(now);
+    clock.textContent = time;
+  }
+
+  function startClock() {
+    updateLiveClock();
+    window.setInterval(updateLiveClock, 1000);
   }
 
   function showOpeningDialog() {
@@ -324,7 +462,22 @@
         model.setAttribute("aria-label", `Veículo de ${mechanic.name}`);
         model.value = mechanic.vehicle_model || "";
         model.hidden = status.value !== "maintenance";
-        status.addEventListener("change", () => { model.hidden = status.value !== "maintenance"; });
+
+        const plate = document.createElement("input");
+        plate.maxLength = 8;
+        plate.placeholder = "Placa";
+        plate.setAttribute("aria-label", `Placa de ${mechanic.name}`);
+        plate.value = mechanic.vehicle_plate || "";
+        plate.hidden = status.value !== "maintenance";
+        plate.addEventListener("input", () => {
+          plate.value = normalizePlate(plate.value);
+        });
+
+        status.addEventListener("change", () => {
+          model.hidden = status.value !== "maintenance";
+          plate.hidden = status.value !== "maintenance";
+        });
+
         const save = document.createElement("button");
         save.className = "button button-primary button-small";
         save.type = "button";
@@ -333,16 +486,18 @@
           try {
             if (status.value === "maintenance") {
               if (!model.value.trim()) return showToast("Informe o modelo do veículo.", true);
-              if (mechanic.status === "maintenance" && mechanic.vehicle_model === model.value.trim()) {
-                return showToast(`${mechanic.name} já está em manutenção com ${model.value.trim()}.`);
+              const normalizedPlate = normalizePlate(plate.value);
+              if (!normalizedPlate) return showToast("Informe a placa do veículo.", true);
+              if (mechanic.status === "maintenance" && mechanic.vehicle_model === model.value.trim() && mechanic.vehicle_plate === normalizedPlate) {
+                return showToast(`${mechanic.name} já está em manutenção com ${model.value.trim()} | ${normalizedPlate}.`);
               }
-              await callRpc("start_service", { p_mechanic_id: mechanic.id, p_model: model.value.trim() }, `${mechanic.name} iniciou serviço: ${model.value.trim()}.`);
+              await callRpc("start_service", { p_mechanic_id: mechanic.id, p_model: model.value.trim(), p_plate: normalizedPlate }, `${mechanic.name} iniciou serviço: ${model.value.trim()} | ${normalizedPlate}.`);
             } else {
               await callRpc("set_mechanic_status", { p_mechanic_id: mechanic.id, p_status: status.value }, `Status de ${mechanic.name} atualizado.`);
             }
           } catch (error) { showError(error, "Falha ao atualizar mecânico"); }
         });
-        controls.append(status, model, save);
+        controls.append(status, model, plate, save);
         if (mechanic.status === "maintenance" && mechanic.vehicle_model) {
           const finish = document.createElement("button");
           finish.className = "button button-outline button-small";
@@ -525,6 +680,7 @@
     }
     try {
       await refresh();
+      startClock();
       connectRealtime();
       await updateAuthView();
       state.businessDate = localDate();

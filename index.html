@@ -16,9 +16,7 @@
   <main class="shell">
     <header class="topbar">
       <a class="brand" href="#" aria-label="Gestão Pátio - início">
-        <img class="brand-logo" src="assets/star-logo.png" alt="STAR Serviços Automotivos">
-        <span class="brand-divider" aria-hidden="true"></span>
-        <span class="brand-system"><strong>GESTÃO</strong><small>PÁTIO</small></span>
+        <img class="brand-logo" src="assets/star-logo.jpg" alt="STAR Serviços Automotivos">
       </a>
       <div class="topbar-right">
         <div class="daily-counts" aria-live="polite">
@@ -26,6 +24,7 @@
           <i></i>
           <div><span>FINALIZADOS</span><strong id="completed-count">—</strong></div>
         </div>
+        <div class="clock-box" id="live-clock" aria-live="polite" aria-label="Relógio local">--:--:--</div>
         <button id="fullscreen-toggle" class="button button-outline fullscreen-toggle" type="button" aria-label="Entrar em tela cheia" title="Entrar em tela cheia">
           <svg class="fullscreen-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3m13-5h3a2 2 0 0 1 2 2v3M3 16v3a2 2 0 0 0 2 2h3m13-5v3a2 2 0 0 1-2 2h-3"/></svg>
           <svg class="fullscreen-exit" viewBox="0 0 24 24" aria-hidden="true" hidden><path d="M8 3v3a2 2 0 0 1-2 2H3m13-5v3a2 2 0 0 0 2 2h3M3 16h3a2 2 0 0 1 2 2v3m13-5h-3a2 2 0 0 0-2 2v3"/></svg>
@@ -35,16 +34,23 @@
     </header>
 
     <section class="intro">
-      <div>
-        <p class="eyebrow">ACOMPANHAMENTO DA OFICINA</p>
+      <div class="title-stack">
         <h1>Fila do pátio</h1>
-        <p class="subheading">Ordem de atendimento e situação dos mecânicos.</p>
       </div>
       <div class="live-status"><span class="live-dot"></span><span id="connection-label">Conectando...</span></div>
     </section>
 
     <section id="notice" class="notice" role="status" hidden></section>
     <section id="mechanic-board" class="mechanic-board" aria-live="polite"></section>
+
+    <div class="screen-divider" aria-hidden="true"></div>
+    <section class="completed-vehicles-section" aria-live="polite">
+      <div class="section-heading compact completed-heading">
+        <h2>VEÍCULOS FINALIZADOS HOJE</h2>
+      </div>
+      <div id="completed-vehicles" class="completed-vehicles-grid"></div>
+    </section>
+
     <section id="loading" class="loading">Carregando dados do pátio...</section>
 
     <section id="admin-panel" class="admin-panel" hidden>
@@ -84,7 +90,7 @@
         </section>
       </div>
     </section>
-    <footer><span>GESTÃO PÁTIO</span><span id="updated-at">Aguardando sincronização</span></footer>
+    <footer><span id="updated-at">Aguardando sincronização</span></footer>
   </main>
 
   <dialog id="opening-dialog" class="dialog">
