@@ -29,8 +29,16 @@ button { cursor: pointer; }
 .topbar, .topbar-right, .brand, .daily-counts, .daily-counts div, .intro, .live-status, .section-heading, .dialog-heading, .dialog-actions { display: flex; align-items: center; }
 .topbar, .intro, .section-heading { justify-content: space-between; }
 .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 0 0 24px;
   border-bottom: 1px solid var(--border);
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
 }
 .brand {
   gap: 16px;
@@ -45,6 +53,7 @@ button { cursor: pointer; }
   object-fit: contain;
   object-position: center;
   background: transparent;
+  filter: drop-shadow(0 0 0 rgba(0, 0, 0, 0));
 }
 .clock-box {
   display: flex;

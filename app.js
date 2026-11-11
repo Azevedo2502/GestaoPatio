@@ -112,11 +112,9 @@
     renderWithMovement(board, () => {
       board.replaceChildren();
 
-      const availableMechanics = [...state.mechanics]
-        .filter((mechanic) => mechanic.status === "available")
-        .sort((a, b) => (a.queue_position ?? 9999) - (b.queue_position ?? 9999));
-
-      const maintenanceMechanics = [...state.mechanics].filter((mechanic) => mechanic.status === "maintenance");
+      const sortedMechanics = [...state.mechanics].sort((a, b) => (a.queue_position ?? 9999) - (b.queue_position ?? 9999));
+      const availableMechanics = sortedMechanics.filter((mechanic) => mechanic.status === "available");
+      const maintenanceMechanics = sortedMechanics.filter((mechanic) => mechanic.status === "maintenance");
 
       const availableColumn = document.createElement("div");
       availableColumn.className = "board-column";
